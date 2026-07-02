@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   defaultRules,
@@ -10,6 +10,43 @@ import {
   type RateOption,
   type RuleSet,
 } from './data'
+
+function VCUEmblem({ size = 56 }: { size?: number }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="Valley Credit Union emblem"
+    >
+      <rect width="100" height="100" rx="18" fill="#1C2270" />
+      {/* Gold C shape: outer annulus sector opening to the right */}
+      <path d="M61,34 A28,28 0 1 0 61,70 L52,62 A15,15 0 1 1 52,42 Z" fill="#E49B00" />
+      {/* White U shape with open top between arms */}
+      <path
+        d="M60,22 L60,68 Q60,86 72,86 Q84,86 84,68 L84,22
+           L77,22 L77,68 Q77,78 72,78 Q67,78 67,68 L67,22 Z"
+        fill="white"
+      />
+      {/* Small horizontal notch tab at top-center of U */}
+      <rect x="67" y="28" width="10" height="6" rx="3" fill="white" />
+    </svg>
+  )
+}
+
+function VCULogo({ height = 56 }: { height?: number }) {
+  return (
+    <div className="vcu-logo">
+      <VCUEmblem size={height} />
+      <div className="vcu-logo-text">
+        <span className="vcu-valley">Valley</span>
+        <span className="vcu-cu">Credit Union</span>
+      </div>
+    </div>
+  )
+}
 
 type LoanInputs = {
   loanTerm: string
@@ -122,6 +159,16 @@ function App() {
   const [signature, setSignature] = useState('T. Johnson')
   const [approvals, setApprovals] = useState<ApprovalState>(defaultApprovals)
   const [auditLog, setAuditLog] = useState<AuditEntry[]>(() => readStoredValue('rate-matrix-audit', []))
+
+  // Admin mode state
+  const [adminMode, setAdminMode] = useState(false)
+  const [showAdminLogin, setShowAdminLogin] = useState(false)
+  const [adminPwInput, setAdminPwInput] = useState('')
+  const [adminPwError, setAdminPwError] = useState(false)
+  const adminPwRef = useRef<HTMLInputElement>(null)
+
+  // Report state
+  const [showReport, setShowReport] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('rate-matrix-rules', JSON.stringify(rules))
@@ -348,6 +395,32 @@ function App() {
     ])
   }
 
+  const handleAdminLogin = () => {
+    if (adminPwInput === '1234') {
+      setAdminMode(true)
+      setShowAdminLogin(false)
+      setAdminPwInput('')
+      setAdminPwError(false)
+    } else {
+      setAdminPwError(true)
+      setAdminPwInput('')
+      adminPwRef.current?.focus()
+    }
+  }
+
+  const handleAdminSaveExit = () => {
+    // Rules persist automatically via the useEffect above; just exit admin mode
+    setAdminMode(false)
+  }
+
+  const handleGenerateReport = () => {
+    setShowReport(true)
+  }
+
+  const handlePrintReport = () => {
+    window.print()
+  }
+
   const dashboard = useMemo(() => {
     const total = auditLog.length
     const approvalsRequired = auditLog.filter((entry) => entry.route !== 'Branch Manager').length
@@ -364,7 +437,191 @@ function App() {
 
   return (
     <main className="app-shell">
+      {/* ── Admin Login Modal ─────────────────────────────────────────── */}
+      {showAdminLogin && (
+        <div
+          className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="admin-modal-title"
+        >
+          <div className="modal-card">
+            <div className="modal-logo">
+              <VCUEmblem size={48} />
+            </div>
+            <h2 id="admin-modal-title" className="modal-title">Admin Access</h2>
+            <p className="modal-subtitle">Enter the administrator password to manage pricing rules.</p>
+            <label className="modal-label">
+              Password
+              <input
+                ref={adminPwRef}
+                type="password"
+                className="modal-input"
+                value={adminPwInput}
+                autoFocus
+                onChange={(e) => { setAdminPwInput(e.target.value); setAdminPwError(false) }}
+                onKeyDown={(e) => e.key === 'Enter' && handleAdminLogin()}
+                aria-describedby={adminPwError ? 'admin-pw-error' : undefined}
+              />
+            </label>
+            {adminPwError && (
+              <p id="admin-pw-error" className="modal-error">Incorrect password. Please try again.</p>
+            )}
+            <div className="button-row modal-buttons">
+              <button type="button" onClick={handleAdminLogin}>
+                Sign In
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => { setShowAdminLogin(false); setAdminPwInput(''); setAdminPwError(false) }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Report Overlay ────────────────────────────────────────────── */}
+      {showReport && (
+        <div className="report-overlay">
+          <div className="report-document">
+            <div className="report-toolbar no-print">
+              <button type="button" className="secondary-button" onClick={() => setShowReport(false)}>
+                ← Close Report
+              </button>
+              <button type="button" onClick={handlePrintReport}>
+                🖨&nbsp;&nbsp;Print Report
+              </button>
+            </div>
+
+            {/* Report body – printed as-is */}
+            <div className="report-body">
+              {/* Header */}
+              <div className="report-header-row">
+                <VCULogo height={60} />
+                <div className="report-header-info">
+                  <h1 className="report-title">Loan &amp; Mortgage Rate Analysis Report</h1>
+                  <p className="report-date">
+                    Prepared: {formatDateTime(new Date().toISOString())}
+                  </p>
+                </div>
+              </div>
+              <hr className="report-rule" />
+
+              {/* Member */}
+              <section className="report-section">
+                <h2 className="report-section-title">Member Information</h2>
+                <div className="report-info-grid">
+                  <div><span className="report-label">Member Name</span><span className="report-value">{memberName}</span></div>
+                  <div><span className="report-label">Prepared By</span><span className="report-value">{currentUser}</span></div>
+                  <div><span className="report-label">Loan Purpose</span><span className="report-value">{loanPurpose}</span></div>
+                  <div><span className="report-label">Signature</span><span className="report-value">{signature}</span></div>
+                </div>
+              </section>
+
+              {/* Rate breakdown */}
+              <section className="report-section">
+                <h2 className="report-section-title">Rate Matrix Breakdown</h2>
+                <table className="report-table">
+                  <thead>
+                    <tr>
+                      <th>Component</th>
+                      <th>Selection</th>
+                      <th>Add-on %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {components.map((c) => (
+                      <tr key={c.label}>
+                        <td>{c.label}</td>
+                        <td>{c.selection}</td>
+                        <td>{formatPct(c.addOn)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <th colSpan={2}>Total Add-on</th>
+                      <th>{formatPct(totalAddOn)}</th>
+                    </tr>
+                  </tfoot>
+                </table>
+              </section>
+
+              {/* Mortgage classification */}
+              <section className="report-section">
+                <h2 className="report-section-title">Mortgage Classification &amp; Pricing</h2>
+                <div className="report-info-grid">
+                  <div><span className="report-label">Classification</span><span className="report-value report-highlight">{mortgageDecision.classification}</span></div>
+                  <div><span className="report-label">Selected Term</span><span className="report-value">{mortgageInputs.mortgageTerm}</span></div>
+                  <div><span className="report-label">Posted Rate</span><span className="report-value">{formatPct(selectedMortgageRate.postedRate)}</span></div>
+                  <div><span className="report-label">Competitive Rate</span><span className="report-value">{selectedMortgageRate.competitiveRate === null ? 'n/a' : formatPct(selectedMortgageRate.competitiveRate)}</span></div>
+                  <div><span className="report-label">Override %</span><span className="report-value">{formatPct(overridePct)}</span></div>
+                  <div><span className="report-label">Risk Score</span><span className="report-value">{riskScore}</span></div>
+                  <div className="report-full"><span className="report-label">Final Recommended Rate</span><span className="report-value report-rate">{formatPct(finalRate)}</span></div>
+                </div>
+                <div className="report-rationale">
+                  <p className="report-label">Decision Rationale</p>
+                  <ul>
+                    {mortgageDecision.reasons.map((r) => <li key={r}>{r}</li>)}
+                  </ul>
+                </div>
+              </section>
+
+              {/* Approval */}
+              <section className="report-section">
+                <h2 className="report-section-title">Approval Workflow</h2>
+                <div className="report-info-grid">
+                  <div><span className="report-label">Required Route</span><span className="report-value">{workflowRoute}</span></div>
+                  <div className="report-full"><span className="report-label">Approval Comments</span><span className="report-value">{approvalComment}</span></div>
+                </div>
+                <table className="report-table" style={{ marginTop: 12 }}>
+                  <thead>
+                    <tr><th>Role</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {workflowRoles.map((role) => (
+                      <tr key={role}>
+                        <td>{role}</td>
+                        <td>
+                          <span className={`status ${approvals[role] === 'Approved' ? 'pass' : approvals[role] === 'Rejected' ? 'fail' : ''}`}>
+                            {approvals[role]}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </section>
+
+              {/* Footer */}
+              <div className="report-footer">
+                <VCUEmblem size={32} />
+                <p>Valley Credit Union — Confidential. This report is intended solely for internal lending use. Not for distribution.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="hero-card">
+        <div className="hero-top no-print">
+          <VCULogo height={52} />
+          <div className="hero-actions">
+            <button type="button" onClick={handleGenerateReport} className="secondary-button">
+              📄&nbsp;&nbsp;Generate Report
+            </button>
+            <button
+              type="button"
+              className={adminMode ? 'admin-active-button' : 'admin-button'}
+              onClick={() => adminMode ? handleAdminSaveExit() : setShowAdminLogin(true)}
+            >
+              {adminMode ? '🔓 Exit Admin' : '🔒 Admin'}
+            </button>
+          </div>
+        </div>
         <div>
           <p className="eyebrow">Valley Credit Union • July 2026</p>
           <h1>Loan &amp; Mortgage Rate Matrix Platform</h1>
@@ -699,17 +956,31 @@ function App() {
         </article>
 
         <article className="panel panel-span-2">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">3. Editable Rules Administration</p>
-              <h2>Pricing tables</h2>
-            </div>
-            <button type="button" className="secondary-button" onClick={() => setRules(defaultRules)}>
-              Reset defaults
-            </button>
-          </div>
+          {adminMode ? (
+            <>
+              <div className="admin-mode-banner">
+                <div>
+                  <span className="admin-mode-badge">🔓 Admin Mode Active</span>
+                  <p className="admin-mode-desc">You can edit all pricing tables below. Changes are saved automatically.</p>
+                </div>
+                <div className="button-row">
+                  <button type="button" onClick={handleAdminSaveExit} className="admin-save-button">
+                    ✔ Save &amp; Exit Admin
+                  </button>
+                  <button type="button" className="secondary-button" onClick={() => setRules(defaultRules)}>
+                    Reset Defaults
+                  </button>
+                </div>
+              </div>
 
-          <div className="admin-grid">
+              <div className="section-heading" style={{ marginTop: 24 }}>
+                <div>
+                  <p className="eyebrow">3. Editable Rules Administration</p>
+                  <h2>Pricing tables</h2>
+                </div>
+              </div>
+
+              <div className="admin-grid">
             {[
               ['Term adjustments', 'termOptions'],
               ['Beacon adjustments', 'beaconOptions'],
@@ -798,6 +1069,8 @@ function App() {
               </tbody>
             </table>
           </div>
+            </>
+          ) : null}
         </article>
 
         <article className="panel">
@@ -855,6 +1128,9 @@ function App() {
             </button>
             <button type="button" className="secondary-button" onClick={() => window.print()}>
               Print rate sheet
+            </button>
+            <button type="button" className="report-button" onClick={handleGenerateReport}>
+              📄 Generate Report
             </button>
           </div>
         </article>
