@@ -208,19 +208,19 @@ function App() {
       }
     }
 
-    let recommendedRate = selectedMortgageRate.postedRate
-
-    if (classification === 'A Mortgage') {
-      recommendedRate = selectedMortgageRate.competitiveRate ?? selectedMortgageRate.postedRate
-    } else if (classification === 'B Mortgage') {
-      recommendedRate = mortgageInputs.insured
+    let recommendedRate =
+      classification === 'A Mortgage'
+        ? (selectedMortgageRate.competitiveRate ?? selectedMortgageRate.postedRate)
+        : classification === 'B Mortgage'
+          ? mortgageInputs.insured
         ? Math.max(fiveYearRate.postedRate - 1, fiveYearRate.competitiveRate ?? 0)
         : Math.max(selectedMortgageRate.postedRate, selectedMortgageRate.competitiveRate ?? 0)
+          : Math.max(selectedMortgageRate.postedRate, fiveYearRate.postedRate) + 2
+
+    if (classification === 'B Mortgage') {
       if (!mortgageInputs.insured) {
         reasons.push('Any uninsured B-mortgage discount should be escalated for Head Office approval.')
       }
-    } else {
-      recommendedRate = Math.max(selectedMortgageRate.postedRate, fiveYearRate.postedRate) + 2
     }
 
     if (mortgageInputs.requestedAmount < 100) {
